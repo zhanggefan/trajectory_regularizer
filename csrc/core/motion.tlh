@@ -1,0 +1,413 @@
+#pragma once
+#include "motion.h"
+
+namespace motreg {
+namespace details {
+template <class T>
+se3<T> errorFwdMotion(const T dt, const Motion<T> &vw_0, const SE3<T> &T_0,
+                      const SE3<T> &T_1) {
+  se3<T> Xi_0;
+  Xi_0 << vw_0[0], T(0), T(0), T(0), T(0), vw_0[1];
+  return (SE3<T>::exp(-dt * Xi_0) * T_0.inverse() * T_1).log();
+};
+
+template <class T>
+se3<T> errorBwdMotion(const T dt, const Motion<T> &vw_1, const SE3<T> &T_1,
+                      const SE3<T> &T_0) {
+  se3<T> Xi_1;
+  Xi_1 << vw_1[0], T(0), T(0), T(0), T(0), vw_1[1];
+  return (SE3<T>::exp(dt * Xi_1) * T_1.inverse() * T_0).log();
+};
+
+template <class T>
+se3<T> errorLabelDiff(const T ctr2base, const SE3<T> &T_base,
+                      const SE3<T> &Z_ctr) {
+  se3<T> Xi_ctr2base;
+  Xi_ctr2base << ctr2base, T(0), T(0), T(0), T(0), T(0);
+  return (SE3<T>::exp(-Xi_ctr2base) * T_base.inverse() * Z_ctr).log();
+};
+
+template <class T>
+std::tuple<JErr2Motion<T>, JErr2SE3<T>, JErr2SE3<T>>
+errorFwdMotionJacobian(const se3<T> &fwdErr, const T dt, const Motion<T> &vw_0,
+                       const SE3<T> &T_0, const SE3<T> &T_1) {
+  se3<T> Xi_0;
+  Xi_0 << vw_0[0], T(0), T(0), T(0), T(0), vw_0[1];
+  JErr2SE3<T> J_Xi_0 = (-dt * SE3<T>::leftJacobianInverse(fwdErr) *
+                        SE3<T>::leftJacobian(-dt * Xi_0));
+  JErr2Motion<T> J_vw_0;
+  J_vw_0.template block<6, 1>(0, 0) = J_Xi_0.col(0);
+  J_vw_0.template block<6, 1>(0, 1) = J_Xi_0.col(5);
+  JErr2SE3<T> J_T_0 =
+      -SE3<T>::leftJacobianInverse(-fwdErr) * T_1.inverse().Adj();
+  JErr2SE3<T> J_T_1 =
+      SE3<T>::leftJacobianInverse(-fwdErr) * T_1.inverse().Adj();
+  return {J_vw_0, J_T_0, J_T_1};
+};
+
+template <class T>
+std::tuple<JErr2Motion<T>, JErr2SE3<T>, JErr2SE3<T>>
+errorBwdMotionJacobian(const se3<T> &bwdErr, const T dt, const Motion<T> &vw_1,
+                       const SE3<T> &T_1, const SE3<T> &T_0) {
+  se3<T> Xi_1;
+  Xi_1 << vw_1[0], T(0), T(0), T(0), T(0), vw_1[1];
+  JErr2SE3<T> J_Xi_1 = dt * SE3<T>::leftJacobianInverse(bwdErr) *
+                       SE3<T>::leftJacobian(dt * Xi_1);
+  JErr2Motion<T> J_vw_1;
+  J_vw_1.template block<6, 1>(0, 0) = J_Xi_1.col(0);
+  J_vw_1.template block<6, 1>(0, 1) = J_Xi_1.col(5);
+  JErr2SE3<T> J_T_1 =
+      -SE3<T>::leftJacobianInverse(-bwdErr) * T_0.inverse().Adj();
+  JErr2SE3<T> J_T_0 =
+      SE3<T>::leftJacobianInverse(-bwdErr) * T_0.inverse().Adj();
+  return {J_vw_1, J_T_1, J_T_0};
+};
+
+template <class T>
+std::tuple<JErr2Scalar<T>, JErr2SE3<T>>
+errorLabelDiffJacobian(const se3<T> &labelErr, const T ctr2base,
+                       const SE3<T> &T_base, const SE3<T> &Z_ctr) {
+  se3<T> Xi_ctr2base;
+  Xi_ctr2base << ctr2base, T(0), T(0), T(0), T(0), T(0);
+  JErr2SE3<T> J_Xi_ctr2base = -SE3<T>::leftJacobianInverse(labelErr) *
+                              SE3<T>::leftJacobian(-Xi_ctr2base);
+  JErr2Scalar<T> J_ctr2base = J_Xi_ctr2base.col(0);
+  JErr2SE3<T> J_T_base =
+      -SE3<T>::leftJacobianInverse(-labelErr) * Z_ctr.inverse().Adj();
+  return {J_ctr2base, J_T_base};
+};
+} // namespace details
+
+namespace part {
+namespace vertex {
+template <class T> bool Ctr2BaseVertex<T>::read(std::istream &is) {
+  return false;
+};
+template <class T> bool Ctr2BaseVertex<T>::write(std::ostream &os) const {
+  return false;
+};
+template <class T> void Ctr2BaseVertex<T>::setToOriginImpl() {
+  this->_estimate = 0;
+};
+template <class T> void Ctr2BaseVertex<T>::oplusImpl(const double *update) {
+  this->_estimate += update[0];
+};
+
+template <class T> bool SE3Vertex<T>::read(std::istream &is) { return false; };
+template <class T> bool SE3Vertex<T>::write(std::ostream &os) const {
+  return false;
+};
+template <class T> void SE3Vertex<T>::setToOriginImpl() {
+  this->_estimate = SE3<T>();
+};
+template <class T> void SE3Vertex<T>::oplusImpl(const double *update) {
+  auto up = SE3<T>::exp(SE3<double>::Tangent(update).cast<T>());
+  this->_estimate = up * this->_estimate;
+};
+
+template <class T> bool MotionVertex<T>::read(std::istream &is) {
+  return false;
+};
+template <class T> bool MotionVertex<T>::write(std::ostream &os) const {
+  return false;
+};
+template <class T> void MotionVertex<T>::setToOriginImpl() {
+  this->_estimate = Motion<T>::Zero();
+};
+template <class T> void MotionVertex<T>::oplusImpl(const double *update) {
+  this->_estimate += Motion<double>(update).cast<T>();
+};
+} // namespace vertex
+
+namespace edge {
+template <class T> EdgeFwdMotion<T>::EdgeFwdMotion(T dt) : dt_(dt) {
+  Base::setInformation(Base::InformationType::Identity());
+}
+template <class T> bool EdgeFwdMotion<T>::read(std::istream &is) {
+  return false;
+}
+template <class T> bool EdgeFwdMotion<T>::write(std::ostream &os) const {
+  return false;
+}
+template <class T> void EdgeFwdMotion<T>::computeError() {
+  const auto &vw_0 =
+      static_cast<const vertex::MotionVertex<T> *>(this->_vertices[0])
+          ->estimate();
+  const auto &T_0 =
+      static_cast<const vertex::SE3Vertex<T> *>(this->_vertices[1])->estimate();
+  const auto &T_1 =
+      static_cast<const vertex::SE3Vertex<T> *>(this->_vertices[2])->estimate();
+  this->_error = details::errorFwdMotion(dt_, vw_0, T_0, T_1);
+};
+template <class T> void EdgeFwdMotion<T>::linearizeOplus() {
+  const auto &vw_0 =
+      static_cast<const vertex::MotionVertex<T> *>(this->_vertices[0])
+          ->estimate();
+  const auto &T_0 =
+      static_cast<const vertex::SE3Vertex<T> *>(this->_vertices[1])->estimate();
+  const auto &T_1 =
+      static_cast<const vertex::SE3Vertex<T> *>(this->_vertices[2])->estimate();
+  this->_jacobianOplus =
+      details::errorFwdMotionJacobian(this->error(), dt_, vw_0, T_0, T_1);
+};
+
+template <class T> EdgeBwdMotion<T>::EdgeBwdMotion(T dt) : dt_(dt) {
+  Base::setInformation(Base::InformationType::Identity());
+}
+template <class T> bool EdgeBwdMotion<T>::read(std::istream &is) {
+  return false;
+};
+template <class T> bool EdgeBwdMotion<T>::write(std::ostream &os) const {
+  return false;
+};
+template <class T> void EdgeBwdMotion<T>::computeError() {
+  const auto &vw_1 =
+      static_cast<const vertex::MotionVertex<T> *>(this->_vertices[0])
+          ->estimate();
+  const auto &T_1 =
+      static_cast<const vertex::SE3Vertex<T> *>(this->_vertices[1])->estimate();
+  const auto &T_0 =
+      static_cast<const vertex::SE3Vertex<T> *>(this->_vertices[2])->estimate();
+  this->_error = details::errorBwdMotion(dt_, vw_1, T_1, T_0);
+};
+template <class T> void EdgeBwdMotion<T>::linearizeOplus() {
+  const auto &vw_1 =
+      static_cast<const vertex::MotionVertex<T> *>(this->_vertices[0])
+          ->estimate();
+  const auto &T_1 =
+      static_cast<const vertex::SE3Vertex<T> *>(this->_vertices[1])->estimate();
+  const auto &T_0 =
+      static_cast<const vertex::SE3Vertex<T> *>(this->_vertices[2])->estimate();
+  this->_jacobianOplus =
+      details::errorBwdMotionJacobian(this->error(), dt_, vw_1, T_1, T_0);
+};
+
+template <class T> EdgeLabelDiff<T>::EdgeLabelDiff() {
+  Base::setInformation(Base::InformationType::Identity());
+}
+template <class T> bool EdgeLabelDiff<T>::read(std::istream &is) {
+  return false;
+};
+template <class T> bool EdgeLabelDiff<T>::write(std::ostream &os) const {
+  return false;
+};
+template <class T> void EdgeLabelDiff<T>::computeError() {
+  const auto &ctr2base =
+      static_cast<const vertex::Ctr2BaseVertex<T> *>(this->_vertices[0])
+          ->estimate();
+  const auto &T_base =
+      static_cast<const vertex::SE3Vertex<T> *>(this->_vertices[1])->estimate();
+  this->_error = details::errorLabelDiff(ctr2base, T_base, this->measurement());
+};
+template <class T> void EdgeLabelDiff<T>::linearizeOplus() {
+  const auto &ctr2base =
+      static_cast<const vertex::Ctr2BaseVertex<T> *>(this->_vertices[0])
+          ->estimate();
+  const auto &T_base =
+      static_cast<const vertex::SE3Vertex<T> *>(this->_vertices[1])->estimate();
+  this->_jacobianOplus = details::errorLabelDiffJacobian(
+      this->error(), ctr2base, T_base, this->measurement());
+};
+
+template <class T> EdgeConstantMotion<T>::EdgeConstantMotion() {
+  Base::setInformation(Base::InformationType::Identity());
+}
+template <class T> bool EdgeConstantMotion<T>::read(std::istream &is) {
+  return false;
+};
+template <class T> bool EdgeConstantMotion<T>::write(std::ostream &os) const {
+  return false;
+};
+template <class T> void EdgeConstantMotion<T>::computeError() {
+  const auto &vw_0 =
+      static_cast<const vertex ::MotionVertex<T> *>(this->_vertices[0])
+          ->estimate();
+  const auto &vw_1 =
+      static_cast<const vertex ::MotionVertex<T> *>(this->_vertices[1])
+          ->estimate();
+  this->_error = vw_0 - vw_1;
+}
+template <class T> void EdgeConstantMotion<T>::linearizeOplus() {
+  this->_jacobianOplus = std::make_tuple(Sophus::Matrix<T, 2, 2>::Identity(),
+                                         -Sophus::Matrix<T, 2, 2>::Identity());
+}
+} // namespace edge
+} // namespace part
+namespace model {
+
+template <class T>
+MotionModel<T>::MotionModelParams::MotionModelParams()
+    : objCtr2Origin(0.), fixObjCtr2Origin(true), steps(100),
+      algorithm("dl_var_cholmod"), verbose(false),
+      weightMotion(EdgeObjMotionFwd::InformationType::Identity()),
+      weightMotionConsistency(
+          EdgeMotionConsistency::InformationType::Identity()),
+      weightObjPose2Label(EdgeObjPose2Label::InformationType::Identity()) {}
+
+template <class T>
+MotionModel<T>::MotionModel(const std::vector<ObjBBox> &input,
+                            const MotionModelParams &params)
+    : input_(input) {
+  assert(input_.size() >= 2 && "there shall be at least two valid annotations");
+  std::sort(input_.begin(), input_.end(),
+            [](const ObjBBox &lhs, const ObjBBox &rhs) {
+              return lhs.sequence < rhs.sequence;
+            });
+
+  g2o::OptimizationAlgorithmProperty algoProperty;
+  algorithm_.reset(g2o::OptimizationAlgorithmFactory::instance()->construct(
+      params.algorithm, algoProperty));
+  optimizer_.setAlgorithm(algorithm_.get());
+  optimizer_.setVerbose(params.verbose);
+
+  vertexId_ = 0;
+  edgeId_ = 0;
+  vertexObjCtr2Origin_.reset();
+  verticesObjMotion_.clear();
+  verticesObjPose_.clear();
+  timestamps_.clear();
+
+  edgesObjMotionFwd_.clear();
+  edgesObjMotionBwd_.clear();
+  edgesMotionConsistency_.clear();
+  edgesObjPose2Label_.clear();
+
+  vertexObjCtr2Origin_ = std::make_unique<VertexObjCtr2Origin>();
+  vertexObjCtr2Origin_->setEstimate(params.objCtr2Origin);
+  vertexObjCtr2Origin_->setFixed(params.fixObjCtr2Origin);
+  vertexObjCtr2Origin_->setId(vertexId_++);
+  optimizer_.addVertex(vertexObjCtr2Origin_.get());
+
+  auto rhs = input_.begin();
+  auto lhs = rhs;
+  for (int seqNode = input_.front().sequence; seqNode <= input_.back().sequence;
+       seqNode++) {
+    while (rhs != input_.end() && rhs->sequence <= seqNode) {
+      lhs = rhs;
+      rhs++;
+    }
+    T timestamp;
+    if (seqNode == lhs->sequence) {
+      timestamp = lhs->timestamp;
+    } else {
+      assert(rhs != input_.end());
+      T ratioRight =
+          T(seqNode - lhs->sequence) / T(rhs->sequence - lhs->sequence);
+      T ratioLeft =
+          T(rhs->sequence - seqNode) / T(rhs->sequence - lhs->sequence);
+      timestamp = lhs->timestamp * ratioLeft + rhs->timestamp * ratioRight;
+    }
+
+    auto vertexObjPose = std::make_unique<VertexObjPose>();
+    vertexObjPose->setEstimate(lhs->pose);
+    vertexObjPose->setId(vertexId_++);
+    optimizer_.addVertex(vertexObjPose.get());
+
+    auto vertexObjMotion = std::make_unique<VertexObjMotion>();
+    vertexObjMotion->setToOriginImpl();
+    vertexObjMotion->setId(vertexId_++);
+    optimizer_.addVertex(vertexObjMotion.get());
+
+    if (seqNode == lhs->sequence) {
+      auto edgeObjPose2Label = std::make_unique<EdgeObjPose2Label>();
+      edgeObjPose2Label->setVertex(0, vertexObjCtr2Origin_.get());
+      edgeObjPose2Label->setVertex(1, vertexObjPose.get());
+      edgeObjPose2Label->setMeasurement(lhs->pose);
+      edgeObjPose2Label->setInformation(params.weightObjPose2Label);
+      edgeObjPose2Label->setId(edgeId_++);
+      if (lhs->poseFixed)
+        edgeObjPose2Label->setInformation(
+            EdgeObjPose2Label::InformationType::Identity() * 1e20);
+      optimizer_.addEdge(edgeObjPose2Label.get());
+      edgesObjPose2Label_.push_back(std::move(edgeObjPose2Label));
+    }
+
+    if (!verticesObjPose_.empty()) {
+      assert(!verticesObjMotion_.empty());
+      T dt = timestamp - timestamps_.back();
+      auto edgeObjMotionFwd = std::make_unique<EdgeObjMotionFwd>(dt);
+      edgeObjMotionFwd->setVertex(0, verticesObjMotion_.back().get());
+      edgeObjMotionFwd->setVertex(1, verticesObjPose_.back().get());
+      edgeObjMotionFwd->setVertex(2, vertexObjPose.get());
+      edgeObjMotionFwd->setInformation(0.5 * params.weightMotion);
+      edgeObjMotionFwd->setId(edgeId_++);
+      optimizer_.addEdge(edgeObjMotionFwd.get());
+      edgesObjMotionFwd_.push_back(std::move(edgeObjMotionFwd));
+
+      auto edgeObjMotionBwd = std::make_unique<EdgeObjMotionBwd>(dt);
+      edgeObjMotionBwd->setVertex(0, vertexObjMotion.get());
+      edgeObjMotionBwd->setVertex(1, vertexObjPose.get());
+      edgeObjMotionBwd->setVertex(2, verticesObjPose_.back().get());
+      edgeObjMotionBwd->setInformation(0.5 * params.weightMotion);
+      edgeObjMotionBwd->setId(edgeId_++);
+      optimizer_.addEdge(edgeObjMotionBwd.get());
+      edgesObjMotionBwd_.push_back(std::move(edgeObjMotionBwd));
+
+      auto edgeMotionConsistency = std::make_unique<EdgeMotionConsistency>();
+      edgeMotionConsistency->setVertex(0, verticesObjMotion_.back().get());
+      edgeMotionConsistency->setVertex(1, vertexObjMotion.get());
+      edgeMotionConsistency->setInformation(params.weightMotionConsistency);
+      edgeMotionConsistency->setId(edgeId_++);
+      optimizer_.addEdge(edgeMotionConsistency.get());
+      edgesMotionConsistency_.push_back(std::move(edgeMotionConsistency));
+    }
+
+    verticesObjPose_.push_back(std::move(vertexObjPose));
+    verticesObjMotion_.push_back(std::move(vertexObjMotion));
+    timestamps_.push_back(timestamp);
+  }
+  optimizer_.initializeOptimization();
+  optimizer_.optimize(params.steps);
+}
+
+template <class T>
+typename MotionModel<T>::ObjBBox MotionModel<T>::output(int sequence) const {
+  assert(sequence >= input_.front().sequence &&
+         sequence <= input_.back().sequence);
+  int idxNode = sequence - input_.front().sequence;
+  auto iterInput = std::find_if(input_.begin(), input_.end(),
+                                [sequence](const ObjBBox &objBBox) {
+                                  return objBBox.sequence == sequence;
+                                });
+  ObjBBox ret;
+  ret.sequence = sequence;
+  ret.timestamp = timestamps_[idxNode];
+  ret.motion = verticesObjMotion_[idxNode]->estimate();
+  typename SE3<T>::Tangent objCtr2Origin = SE3<T>::Tangent::Zero();
+  objCtr2Origin[0] = vertexObjCtr2Origin_->estimate();
+  ret.poseFixed = iterInput != input_.end() && iterInput->poseFixed;
+  ret.pose = ret.poseFixed ? iterInput->pose
+                           : verticesObjPose_[idxNode]->estimate() *
+                                 SE3<T>::exp(objCtr2Origin);
+  ret.errLabel = (iterInput == input_.end())
+                     ? EdgeObjPose2Label::ErrorVector::Zero()
+                     : edgesObjPose2Label_[iterInput - input_.begin()]->error();
+  ret.errMotionFwd = idxNode >= edgesObjMotionFwd_.size()
+                         ? EdgeObjMotionFwd::ErrorVector::Zero()
+                         : edgesObjMotionFwd_[idxNode]->error();
+  ret.errMotionBwd = idxNode <= 0 ? EdgeObjMotionFwd::ErrorVector::Zero()
+                                  : edgesObjMotionFwd_[idxNode - 1]->error();
+  return ret;
+}
+
+template <class T>
+std::vector<typename MotionModel<T>::ObjBBox> MotionModel<T>::output() const {
+  std::vector<typename MotionModel<T>::ObjBBox> ret;
+  for (const auto &objBBox : input_) {
+    ret.push_back(output(objBBox.sequence));
+  }
+  return ret;
+}
+
+template <class T>
+std::vector<typename MotionModel<T>::ObjBBox>
+MotionModel<T>::output(const std::vector<int> &sequences) const {
+  std::vector<typename MotionModel<T>::ObjBBox> ret;
+  for (auto sequence : sequences) {
+    ret.push_back(output(sequence));
+  }
+  return ret;
+}
+
+} // namespace model
+} // namespace motreg
