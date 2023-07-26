@@ -3,7 +3,6 @@
 #include <g2o/core/base_fixed_sized_edge.h>
 #include <g2o/core/base_vertex.h>
 #include <g2o/core/optimization_algorithm.h>
-#include <g2o/core/optimization_algorithm_factory.h>
 #include <g2o/core/sparse_optimizer.h>
 #include <sophus/se3.hpp>
 
@@ -183,7 +182,6 @@ public:
     T objCtr2Origin;
     bool fixObjCtr2Origin;
     int steps;
-    std::string algorithm;
     bool verbose;
     MotionModelParams();
   };

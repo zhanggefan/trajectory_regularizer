@@ -1,5 +1,9 @@
 #pragma once
 #include "motion.h"
+#include <g2o/core/block_solver.h>
+#include <g2o/core/optimization_algorithm_dogleg.h>
+#include <g2o/core/optimization_algorithm_factory.h>
+#include <g2o/solvers/cholmod/linear_solver_cholmod.h>
 
 namespace motreg {
 namespace details {
@@ -237,8 +241,7 @@ namespace model {
 
 template <class T>
 MotionModel<T>::MotionModelParams::MotionModelParams()
-    : objCtr2Origin(0.), fixObjCtr2Origin(true), steps(100),
-      algorithm("dl_var_cholmod"), verbose(false),
+    : objCtr2Origin(0.), fixObjCtr2Origin(true), steps(100), verbose(false),
       weightMotion(EdgeObjMotionFwd::InformationType::Identity()),
       weightMotionConsistency(
           EdgeMotionConsistency::InformationType::Identity()),
@@ -253,10 +256,13 @@ MotionModel<T>::MotionModel(const std::vector<ObjBBox> &input,
             [](const ObjBBox &lhs, const ObjBBox &rhs) {
               return lhs.sequence < rhs.sequence;
             });
-
-  g2o::OptimizationAlgorithmProperty algoProperty;
-  algorithm_.reset(g2o::OptimizationAlgorithmFactory::instance()->construct(
-      params.algorithm, algoProperty));
+  auto linearSolver = std::make_unique<
+      g2o::LinearSolverCholmod<g2o::BlockSolverX::PoseMatrixType>>();
+  linearSolver->setBlockOrdering(true);
+  auto blockSolver =
+      std::make_unique<g2o::BlockSolverX>(std::move(linearSolver));
+  algorithm_ = std::make_unique<g2o::OptimizationAlgorithmDogleg>(
+      std::move(blockSolver));
   optimizer_.setAlgorithm(algorithm_.get());
   optimizer_.setVerbose(params.verbose);
 

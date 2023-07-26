@@ -183,32 +183,6 @@ PYBIND11_MODULE(ext, m) {
 
   pybind11::class_<g2o::OptimizationAlgorithm>(g2o, "OptimizationAlgorithm");
 
-  pybind11::class_<
-      g2o::OptimizationAlgorithmFactory,
-      std::unique_ptr<g2o::OptimizationAlgorithmFactory, pybind11::nodelete>>(
-      g2o, "OptimizationAlgorithmFactory")
-      .def(pybind11::init([]() {
-        return std::unique_ptr<g2o::OptimizationAlgorithmFactory,
-                               pybind11::nodelete>(
-            g2o::OptimizationAlgorithmFactory::instance());
-      }))
-      .def("construct",
-           [](const g2o::OptimizationAlgorithmFactory &factory,
-              const std::string &name) {
-             g2o::OptimizationAlgorithmProperty solverProperty;
-             return std::make_tuple(factory.construct(name, solverProperty),
-                                    solverProperty);
-           })
-      .def_static("listSolvers", []() {
-        std::map<std::string, g2o::OptimizationAlgorithmProperty>
-            solver_properties;
-        for (const auto &creator :
-             g2o::OptimizationAlgorithmFactory::instance()->creatorList()) {
-          solver_properties[creator->property().name] = creator->property();
-        }
-        return solver_properties;
-      });
-
   pybind11::class_<g2o::SparseOptimizer>(g2o, "SparseOptimizer")
       .def(pybind11::init<>())
       .def("initializeOptimization",
@@ -299,9 +273,6 @@ PYBIND11_MODULE(ext, m) {
                 .cast<bool>();
         params->steps =
             getattr(paramsDict, "steps", pybind11::int_(100)).cast<int>();
-        params->algorithm =
-            getattr(paramsDict, "algorithm", pybind11::str("dl_var_cholmod"))
-                .cast<std::string>();
         params->verbose =
             getattr(paramsDict, "verbose", pybind11::bool_(false)).cast<bool>();
         return params;
@@ -317,7 +288,6 @@ PYBIND11_MODULE(ext, m) {
       .def_readwrite("fixObjCtr2Origin",
                      &MotionModel::MotionModelParams::fixObjCtr2Origin)
       .def_readwrite("steps", &MotionModel::MotionModelParams::steps)
-      .def_readwrite("algorithm", &MotionModel::MotionModelParams::algorithm)
       .def_readwrite("verbose", &MotionModel::MotionModelParams::verbose)
       .def("toDict", [](const MotionModel::MotionModelParams &self) {
         using namespace pybind11::literals;
@@ -327,8 +297,7 @@ PYBIND11_MODULE(ext, m) {
             "objCtr2Origin"_a = self.objCtr2Origin,
             "fixObjCtr2Origin"_a = self.fixObjCtr2Origin,
             "weightObjPose2Label"_a = self.weightObjPose2Label,
-            "steps"_a = self.steps, "algorithm"_a = self.algorithm,
-            "verbose"_a = self.verbose);
+            "steps"_a = self.steps, "verbose"_a = self.verbose);
       });
 
   pybind11::class_<MotionModel, std::unique_ptr<MotionModel>>(m, "MotionModel")
