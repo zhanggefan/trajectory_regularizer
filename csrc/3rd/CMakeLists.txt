@@ -26,11 +26,13 @@ set(SOPHUS_USE_BASIC_LOGGING OFF CACHE BOOL "" FORCE)
 
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
-find_package(suitesparse CONFIG REQUIRED)
-if (TARGET SuiteSparse::cholmod)
-    set(SuiteSparse_CHOLMOD_FOUND ON CACHE BOOL "" FORCE)
-    add_library(SuiteSparse::CHOLMOD ALIAS SuiteSparse::cholmod)
-endif()
+if (MSVC)
+    find_package(suitesparse CONFIG REQUIRED)
+    if (TARGET SuiteSparse::cholmod)
+        set(SuiteSparse_CHOLMOD_FOUND ON CACHE BOOL "" FORCE)
+        add_library(SuiteSparse::CHOLMOD ALIAS SuiteSparse::cholmod)
+    endif ()
+endif ()
 
 add_subdirectory(g2o)
 add_subdirectory(sophus)
