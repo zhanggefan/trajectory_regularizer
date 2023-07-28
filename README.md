@@ -60,7 +60,13 @@ MOTREG：用于3D框轨迹整定的运动学模型
 修缮中
 
 ## Demo
-Demo需要编译python接口
+注：demo需要编译python接口。编译方法见上一章节   
+安装demo所需要的python包
+```
+pip install open3d
+pip install matplotlib
+```
+在本仓库目录下，配置`PYTHONPATH`环境变量并运行
 ```
 $env:PYTHONPATH="."
 python examples/demo.py
