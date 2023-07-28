@@ -2,6 +2,8 @@
 
 #ifdef _WIN32
 #define API_EXPORT __declspec(dllexport)
+#else
+#define API_EXPORT __attribute__((visibility("default")))
 #endif
 
 template motreg::se3<double> API_EXPORT motreg::details::errorFwdMotion<double>(
@@ -10,10 +12,9 @@ template motreg::se3<double> API_EXPORT motreg::details::errorFwdMotion<double>(
 template motreg::se3<double> API_EXPORT motreg::details::errorBwdMotion<double>(
     const double dt, const motreg::Motion<double> &vw_1,
     const motreg::SE3<double> &T_1, const motreg::SE3<double> &T_0);
-template motreg::se3<double>
-    API_EXPORT motreg::details::errorLabelDiff<double>(const double ctr2base,
-                                                       const motreg::SE3<double> &T_base,
-                                                       const motreg::SE3<double> &Z_ctr);
+template motreg::se3<double> API_EXPORT motreg::details::errorLabelDiff<double>(
+    const double ctr2base, const motreg::SE3<double> &T_base,
+    const motreg::SE3<double> &Z_ctr);
 template std::tuple<motreg::details::JErr2Motion<double>,
                     motreg::details::JErr2SE3<double>,
                     motreg::details::JErr2SE3<double>>
@@ -43,6 +44,9 @@ template class API_EXPORT motreg::part::edge::EdgeLabelDiff<double>;
 template class API_EXPORT motreg::part::edge::EdgeConstantMotion<double>;
 
 template class API_EXPORT motreg::model::MotionModel<double>;
+#ifdef _WIN32
 template class API_EXPORT motreg::model::MotionModel<double>::MotionModelParams;
-template API_EXPORT motreg::model::MotionModel<double>::MotionModelParams::MotionModelParams();
+template API_EXPORT
+motreg::model::MotionModel<double>::MotionModelParams::MotionModelParams();
 template class API_EXPORT motreg::model::MotionModel<double>::ObjBBox;
+#endif

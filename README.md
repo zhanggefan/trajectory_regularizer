@@ -9,12 +9,13 @@ MOTREG：用于3D框轨迹整定的运动学模型
 - 锁死轨迹中部分3D框，并使用运动学模型优化其余未锁死的3D框，实现交互式轨迹整定
 - 给定轨迹的首、尾两个3D框，根据运动学模型插补中间的3D框
 - 使用运动学模型拟合轨迹，得到轨迹中每个3D框的速度估计
-- CPU端单词拟合优化耗时不长于100ms，可做到准实时交互
+- CPU端单次拟合优化耗时不长于100ms，可做到准实时交互
 
 ## 编译
 该库依赖CMake进行编译。第三方依赖库包含：
 * suitesparse —— 稀疏矩阵求解库，用于提升g2o的求解速度，需要通过vcpkg安装
 * eigen3 —— 矩阵运算库，需要通过vcpkg安装
+* fmt —— cpp字符串格式化库，需要通过vcpkg安装
 * sophus —— 李代数运算库，已经是本仓库的git submodule
 * g2o —— 图优化库，已经是本仓库的git submodule
 
@@ -26,10 +27,11 @@ MOTREG：用于3D框轨迹整定的运动学模型
 > .\bootstrap-vcpkg.bat
 > .\vcpkg integrate install
 ```
-#### 步骤二：采用vcpkg安装eigen3和suitesparse依赖（耗时很长）
+#### 步骤二：采用vcpkg安装eigen3、suitesparse、fmt依赖（耗时很长）
 ```
 > .\vcpkg install eigen3:x64-windows
 > .\vcpkg install suitesparse:x64-windows
+> .\vcpkg install fmt:x64-windows
 ```
 #### 步骤三：编译本仓库
 ```
@@ -57,17 +59,51 @@ MOTREG：用于3D框轨迹整定的运动学模型
 编译得到的dll会落在```./motreg/bins/Release```文件夹下面
 
 ### Ubuntu下的编译过程
-修缮中
+#### 步骤一：安装eigen3、suitesparse、fmt依赖
+```
+> sudo apt install libeigen3-dev
+> sudo apt install libsuitesparse-dev
+> sudo apt install libfmt-dev
+```
+#### 步骤二：编译本仓库
+```
+> git clone https://oagit.cowarobot.cn/zhanggefan/motreg.git
+> cd motreg
+```
+这一步耗时很长，因为sophus依赖库代码有300MB大小
+```
+> git submodule update --init --recursive
+```
+开始CMake编译。如果希望编译python接口以便使用`examples/demo.py`，则：
+```
+> mkdir build
+> cd build
+> cmake -DCMAKE_BUILD_TYPE=Release -DPython3_EXECUTABLE={你的python路径}/python -S .. 
+> cmake --build .
+```
+如果没有编译python接口的需要，则：
+```
+> mkdir build
+> cd build
+> cmake -DCMAKE_BUILD_TYPE=Release -S .. 
+> cmake --build .
+```
+编译得到的so会落在```./motreg/libs```文件夹下面
 
 ## Demo
-注：demo需要编译python接口。编译方法见上一章节   
-安装demo所需要的python包
+注：Demo需要编译python接口。编译方法见上一章节   
+安装所需要的python包
 ```
-pip install open3d
-pip install matplotlib
+> pip install open3d
+> pip install matplotlib
 ```
-在本仓库目录下，配置`PYTHONPATH`环境变量并运行
+在本仓库目录下，配置`PYTHONPATH`环境变量并运行Demo
+### Windows下运行Demo
 ```
-$env:PYTHONPATH="."
-python examples/demo.py
+> $env:PYTHONPATH="."
+> python examples/demo.py
+```
+### Ubuntu下运行Demo
+```
+> PYTHONPATH=. python examples/demo.py
 ```
