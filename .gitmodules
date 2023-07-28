@@ -4,6 +4,3 @@
 [submodule "csrc/3rd/sophus"]
 	path = csrc/3rd/sophus
 	url = https://github.com/strasdat/Sophus.git
-[submodule "csrc/3rd/eigen"]
-	path = csrc/3rd/eigen
-	url = https://gitlab.com/libeigen/eigen.git
