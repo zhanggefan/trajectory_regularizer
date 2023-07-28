@@ -6,7 +6,8 @@ import open3d.visualization.gui as gui
 import open3d.visualization.rendering as rendering
 import matplotlib.pyplot as plt
 from motreg import utils, MotionModel
-from deploy3d.misc.loading import MONGODBBackend
+import os.path as osp
+import json
 
 
 class RegularTrajectory:
@@ -84,7 +85,7 @@ class RegularTrajectory:
         motion_layout = gui.Vert()
         weightMotion = gui.Slider(gui.Slider.DOUBLE)
         weightMotion.set_limits(-10, 10)
-        weightMotion.double_value = 1.0
+        weightMotion.double_value = 0.0
         weightMotion.set_on_value_changed(self._on_slider_motion)
         self.weightMotion_s = weightMotion
 
@@ -98,7 +99,7 @@ class RegularTrajectory:
         motionconsis_layout = gui.Vert()
         weightMotionConsistency = gui.Slider(gui.Slider.DOUBLE)
         weightMotionConsistency.set_limits(-10, 10)
-        weightMotionConsistency.double_value = 1.0
+        weightMotionConsistency.double_value = 0.0
         weightMotionConsistency.set_on_value_changed(
             self._on_slider_motion_consis)
         self.weightMotionConsistency_s = weightMotionConsistency
@@ -113,7 +114,7 @@ class RegularTrajectory:
         objpose2label_layout = gui.Vert()
         weightObjPose2Label = gui.Slider(gui.Slider.DOUBLE)
         weightObjPose2Label.set_limits(-10, 10)
-        weightObjPose2Label.double_value = 1.0
+        weightObjPose2Label.double_value = 0.0
         weightObjPose2Label.set_on_value_changed(self._on_slider_objpose2label)
         self.weightObjPose2Label_s = weightObjPose2Label
 
@@ -352,9 +353,9 @@ class RegularTrajectory:
         self.weightMotion = 1.0
         self.weightMotionConsistency = 1.0
         self.weightObjPose2Label = 1.0
-        self.weightMotion_s.double_value = 1.0
-        self.weightMotionConsistency_s.double_value = 1.0
-        self.weightObjPose2Label_s.double_value = 1.0
+        self.weightMotion_s.double_value = 0.0
+        self.weightMotionConsistency_s.double_value = 0.0
+        self.weightObjPose2Label_s.double_value = 0.0
 
         self.switch_to_hide_origin.is_on = False
         self.switch_to_hide_regular.is_on = False
@@ -475,22 +476,8 @@ class RegularTrajectory:
 
 
 def main():
-    mongo_cfg = dict(
-        database='ai-cowa3d-u1-v56-reference',
-        host='mongodb://perception:nJLSj65JOy@172.16.100.107,172.16.100.108,172.16.100.109/?tls=false')
-    info_client = MONGODBBackend(**mongo_cfg, pbar=True)
-
-    all_infos = info_client.query(
-        'trajectories/labels',
-        filter={'trajectory.0.gt_names_3d': {'$in': [
-            'cyclist',
-            'vehicle',
-            'big_vehicle',
-        ]}, '$expr': {"$gt": [{"$size": '$trajectory'}, 50]}},
-        projection=['_id', 'trajectory', 'context',
-                    'base_pose', 'pts'],
-        limit=100,
-        cursor_type='NON_TAILABLE')
+    with open(osp.join(osp.split(__file__)[0], 'demo.json')) as f:
+        all_infos = json.load(f)
     all_infos = sorted(all_infos, key=lambda x: x['_id'])
 
     def vis_iter_out(all_infos):
