@@ -1,5 +1,5 @@
 #pragma once
-#include "motion.h"
+#include "motreg_implement.h"
 #include <g2o/core/block_solver.h>
 #include <g2o/core/optimization_algorithm_dogleg.h>
 #include <g2o/core/optimization_algorithm_factory.h>
@@ -238,14 +238,6 @@ template <class T> void EdgeConstantMotion<T>::linearizeOplus() {
 } // namespace edge
 } // namespace part
 namespace model {
-
-template <class T>
-MotionModel<T>::MotionModelParams::MotionModelParams()
-    : objCtr2Origin(0.), fixObjCtr2Origin(true), steps(100), verbose(false),
-      weightMotion(EdgeObjMotionFwd::InformationType::Identity()),
-      weightMotionConsistency(
-          EdgeMotionConsistency::InformationType::Identity()),
-      weightObjPose2Label(EdgeObjPose2Label::InformationType::Identity()) {}
 
 template <class T>
 MotionModel<T>::MotionModel(const std::vector<ObjBBox> &input,

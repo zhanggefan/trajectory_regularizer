@@ -176,14 +176,16 @@ public:
     static_assert(
         std::is_same<typename EdgeObjMotionFwd::InformationType,
                      typename EdgeObjMotionBwd::InformationType>::value);
-    typename EdgeObjMotionFwd::InformationType weightMotion;
-    typename EdgeMotionConsistency::InformationType weightMotionConsistency;
-    typename EdgeObjPose2Label::InformationType weightObjPose2Label;
-    T objCtr2Origin;
-    bool fixObjCtr2Origin;
-    int steps;
-    bool verbose;
-    MotionModelParams();
+    typename EdgeObjMotionFwd::InformationType weightMotion =
+        EdgeObjMotionFwd::InformationType::Identity();
+    typename EdgeMotionConsistency::InformationType weightMotionConsistency =
+        EdgeMotionConsistency::InformationType::Identity();
+    typename EdgeObjPose2Label::InformationType weightObjPose2Label =
+        EdgeObjPose2Label::InformationType::Identity();
+    T objCtr2Origin = 0.;
+    bool fixObjCtr2Origin = true;
+    int steps = 100;
+    bool verbose = false;
   };
 
 private:

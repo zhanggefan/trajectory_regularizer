@@ -1,26 +1,39 @@
 import numpy as np
 import open3d as o3d
 import matplotlib.pyplot as plt
-from motreg import utils, MotionModel
+from motreg import capi
+from scipy.spatial.transform import Rotation as R
 import os.path as osp
 import json
 
 
 def regularize(traj_boxes):
-    input = [utils.ObjBBox(_) for _ in traj_boxes]
-    model_params = utils.MotionModelParams()
+    input = []
+    for item in traj_boxes:
+        box = capi.ObjBBox()
+        box.sequence = item['sequence']
+        box.timestamp = item['timestamp']
+        box.boxBottomCtrXYZ = item['pose'][:3, 3]
+        box.boxRotationXYZW = R.from_matrix(item['pose'][:3, :3]).as_quat()
+        box.boxFixed = False
+        input.append(box)
+    model_params = capi.MotionModelParams()
     model_params.verbose = True
-    model_params.weightMotion = np.diag(
-        [1.0, 1.0, 1.0, 1.0, 1.0, 1.0])
-    model_params.weightMotionConsistency = np.diag(
-        [1.0, 1.0])
-    model_params.weightObjPose2Label = np.diag(
-        [0.2, 0.2, 0.2, 0.5, 0.5, 0.2])
-    model = MotionModel(input, model_params)
-    outputs = [_.toDict() for _ in model.output(
-        [_['sequence'] for _ in traj_boxes])]
+    model_params.weightMotion = [1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
+    model_params.weightMotionConsistency = [1.0, 1.0]
+    model_params.weightObjPose2Label = [0.2, 0.2, 0.2, 0.5, 0.5, 0.2]
+    model = capi.MotionModel(input, model_params)
+    outputs = model.output([_['sequence'] for _ in traj_boxes])
     for obj, output in zip(traj_boxes, outputs):
-        obj.update(output)
+        obj['sequence'] = output.sequence
+        obj['timestamp'] = output.timestamp
+        obj['pose'][:3, :3] = R.from_quat(output.boxRotationXYZW).as_matrix()
+        obj['pose'][:3, 3] = output.boxBottomCtrXYZ
+        obj['boxFixed'] = output.boxFixed
+        obj['motion'] = output.motion
+        obj['errMotionFwd'] = output.errMotionFwd
+        obj['errMotionBwd'] = output.errMotionBwd
+        obj['errLabel'] = output.errLabel
 
     return traj_boxes
 

@@ -1,4 +1,5 @@
-#include "core/motion.h"
+#include "core/motreg.h"
+#include "core/motreg_implement.h"
 #include <g2o/core/optimization_algorithm.h>
 #include <g2o/core/optimization_algorithm_factory.h>
 #include <g2o/core/sparse_optimizer.h>
@@ -203,10 +204,11 @@ PYBIND11_MODULE(ext, m) {
                     &g2o::SparseOptimizer::setAlgorithm);
 
   using MotionModel = motreg::model::MotionModel<double>;
-  pybind11::class_<MotionModel::ObjBBox, std::unique_ptr<MotionModel::ObjBBox>>(
-      utils, "ObjBBox")
+  using ObjBBox = MotionModel::ObjBBox;
+  using MotionModelParams = MotionModel::MotionModelParams;
+  pybind11::class_<ObjBBox, std::unique_ptr<ObjBBox>>(utils, "ObjBBox")
       .def(pybind11::init([](const pybind11::dict &objDict) {
-        auto objBBox = std::make_unique<MotionModel::ObjBBox>();
+        auto objBBox = std::make_unique<ObjBBox>();
         objBBox->timestamp = objDict["timestamp"].cast<double>();
         objBBox->sequence = objDict["sequence"].cast<int>();
         objBBox->pose =
@@ -220,15 +222,15 @@ PYBIND11_MODULE(ext, m) {
                 : motion.cast<MotionModel::VertexObjMotion::EstimateType>();
         return objBBox;
       }))
-      .def_readwrite("sequence", &MotionModel::ObjBBox::sequence)
-      .def_readwrite("timestamp", &MotionModel::ObjBBox::timestamp)
-      .def_readwrite("pose", &MotionModel::ObjBBox::pose)
-      .def_readwrite("poseFixed", &MotionModel::ObjBBox::poseFixed)
-      .def_readwrite("motion", &MotionModel::ObjBBox::motion)
-      .def_readwrite("errMotionFwd", &MotionModel::ObjBBox::errMotionFwd)
-      .def_readwrite("errMotionBwd", &MotionModel::ObjBBox::errMotionBwd)
-      .def_readwrite("errLabel", &MotionModel::ObjBBox::errLabel)
-      .def("toDict", [](const MotionModel::ObjBBox &self) {
+      .def_readwrite("sequence", &ObjBBox::sequence)
+      .def_readwrite("timestamp", &ObjBBox::timestamp)
+      .def_readwrite("pose", &ObjBBox::pose)
+      .def_readwrite("poseFixed", &ObjBBox::poseFixed)
+      .def_readwrite("motion", &ObjBBox::motion)
+      .def_readwrite("errMotionFwd", &ObjBBox::errMotionFwd)
+      .def_readwrite("errMotionBwd", &ObjBBox::errMotionBwd)
+      .def_readwrite("errLabel", &ObjBBox::errLabel)
+      .def("toDict", [](const ObjBBox &self) {
         using namespace pybind11::literals;
         return pybind11::dict(
             "sequence"_a = self.sequence, "timestamp"_a = self.timestamp,
@@ -237,12 +239,11 @@ PYBIND11_MODULE(ext, m) {
             "errMotionBwd"_a = self.errMotionBwd, "errLabel"_a = self.errLabel);
       });
 
-  pybind11::class_<MotionModel::MotionModelParams,
-                   std::unique_ptr<MotionModel::MotionModelParams>>(
+  pybind11::class_<MotionModelParams, std::unique_ptr<MotionModelParams>>(
       utils, "MotionModelParams")
       .def(pybind11::init<>())
       .def(pybind11::init([](const pybind11::dict &paramsDict) {
-        auto params = std::make_unique<MotionModel::MotionModelParams>();
+        auto params = std::make_unique<MotionModelParams>();
         auto weightMotion =
             getattr(paramsDict, "weightMotion", pybind11::none());
         params->weightMotion =
@@ -277,19 +278,16 @@ PYBIND11_MODULE(ext, m) {
             getattr(paramsDict, "verbose", pybind11::bool_(false)).cast<bool>();
         return params;
       }))
-      .def_readwrite("weightMotion",
-                     &MotionModel::MotionModelParams::weightMotion)
+      .def_readwrite("weightMotion", &MotionModelParams::weightMotion)
       .def_readwrite("weightMotionConsistency",
-                     &MotionModel::MotionModelParams::weightMotionConsistency)
+                     &MotionModelParams::weightMotionConsistency)
       .def_readwrite("weightObjPose2Label",
-                     &MotionModel::MotionModelParams::weightObjPose2Label)
-      .def_readwrite("objCtr2Origin",
-                     &MotionModel::MotionModelParams::objCtr2Origin)
-      .def_readwrite("fixObjCtr2Origin",
-                     &MotionModel::MotionModelParams::fixObjCtr2Origin)
-      .def_readwrite("steps", &MotionModel::MotionModelParams::steps)
-      .def_readwrite("verbose", &MotionModel::MotionModelParams::verbose)
-      .def("toDict", [](const MotionModel::MotionModelParams &self) {
+                     &MotionModelParams::weightObjPose2Label)
+      .def_readwrite("objCtr2Origin", &MotionModelParams::objCtr2Origin)
+      .def_readwrite("fixObjCtr2Origin", &MotionModelParams::fixObjCtr2Origin)
+      .def_readwrite("steps", &MotionModelParams::steps)
+      .def_readwrite("verbose", &MotionModelParams::verbose)
+      .def("toDict", [](const MotionModelParams &self) {
         using namespace pybind11::literals;
         return pybind11::dict(
             "weightMotion"_a = self.weightMotion,
@@ -301,17 +299,16 @@ PYBIND11_MODULE(ext, m) {
       });
 
   pybind11::class_<MotionModel, std::unique_ptr<MotionModel>>(m, "MotionModel")
-      .def(pybind11::init<const std::vector<MotionModel::ObjBBox> &,
-                          const MotionModel::MotionModelParams &>(),
-           pybind11::arg("trajectory"), pybind11::arg("MotionModelParams"))
+      .def(pybind11::init<const std::vector<ObjBBox> &,
+                          const MotionModelParams &>(),
+           pybind11::arg("trajectory"), pybind11::arg("params"))
+      .def("output", static_cast<ObjBBox (MotionModel::*)(int) const>(
+                         &MotionModel::output))
       .def("output",
-           static_cast<MotionModel::ObjBBox (MotionModel::*)(int) const>(
+           static_cast<std::vector<ObjBBox> (MotionModel::*)(void) const>(
                &MotionModel::output))
-      .def("output", static_cast<std::vector<MotionModel::ObjBBox> (
-                         MotionModel::*)(void) const>(&MotionModel::output))
-      .def("output",
-           static_cast<std::vector<MotionModel::ObjBBox> (MotionModel::*)(
-               const std::vector<int> &) const>(&MotionModel::output))
+      .def("output", static_cast<std::vector<ObjBBox> (MotionModel::*)(
+                         const std::vector<int> &) const>(&MotionModel::output))
       .def_property_readonly("debugVerticesTimestamps",
                              &MotionModel::debugVerticesTimestamps)
       .def_property_readonly("debugVertexObjCtr2Origin",
@@ -337,4 +334,48 @@ PYBIND11_MODULE(ext, m) {
         }
         return ret;
       });
+  auto capi = m.def_submodule("capi");
+  using CAPIObjBBox = motreg::api::ObjBBox;
+  using CAPIMotionModelParams = motreg::api::MotionModelParams;
+  using CAPIMotionModel = motreg::api::MotionModel;
+
+  pybind11::class_<CAPIObjBBox, std::unique_ptr<CAPIObjBBox>>(capi, "ObjBBox")
+      .def(pybind11::init<>())
+      .def_readwrite("sequence", &CAPIObjBBox::sequence)
+      .def_readwrite("timestamp", &CAPIObjBBox::timestamp)
+      .def_readwrite("boxBottomCtrXYZ", &CAPIObjBBox::boxBottomCtrXYZ)
+      .def_readwrite("boxRotationXYZW", &CAPIObjBBox::boxRotationXYZW)
+      .def_readwrite("boxFixed", &CAPIObjBBox::boxFixed)
+      .def_readwrite("motion", &CAPIObjBBox::motionVW)
+      .def_readwrite("errMotionFwd", &CAPIObjBBox::errMotionFwd)
+      .def_readwrite("errMotionBwd", &CAPIObjBBox::errMotionBwd)
+      .def_readwrite("errLabel", &CAPIObjBBox::errLabel);
+
+  pybind11::class_<CAPIMotionModelParams,
+                   std::unique_ptr<CAPIMotionModelParams>>(capi,
+                                                           "MotionModelParams")
+      .def(pybind11::init<>())
+      .def_readwrite("weightMotion", &CAPIMotionModelParams::weightMotion)
+      .def_readwrite("weightMotionConsistency",
+                     &CAPIMotionModelParams::weightMotionConsistency)
+      .def_readwrite("weightObjPose2Label",
+                     &CAPIMotionModelParams::weightObjPose2Label)
+      .def_readwrite("objCtr2Origin", &CAPIMotionModelParams::objCtr2Origin)
+      .def_readwrite("fixObjCtr2Origin",
+                     &CAPIMotionModelParams::fixObjCtr2Origin)
+      .def_readwrite("steps", &CAPIMotionModelParams::steps)
+      .def_readwrite("verbose", &CAPIMotionModelParams::verbose);
+
+  pybind11::class_<CAPIMotionModel, std::unique_ptr<CAPIMotionModel>>(
+      capi, "MotionModel")
+      .def(pybind11::init<const std::vector<CAPIObjBBox> &,
+                          const CAPIMotionModelParams &>(),
+           pybind11::arg("trajectory"), pybind11::arg("params"))
+      .def("output", static_cast<CAPIObjBBox (CAPIMotionModel::*)(int) const>(
+                         &CAPIMotionModel::output))
+      .def("output", static_cast<std::vector<CAPIObjBBox> (CAPIMotionModel::*)(
+                         void) const>(&CAPIMotionModel::output))
+      .def("output",
+           static_cast<std::vector<CAPIObjBBox> (CAPIMotionModel::*)(
+               const std::vector<int> &) const>(&CAPIMotionModel::output));
 }
