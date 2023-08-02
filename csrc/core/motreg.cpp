@@ -40,11 +40,10 @@ template class API_EXPORT motreg::part::edge::EdgeConstantMotion<double>;
 
 template class API_EXPORT motreg::model::MotionModel<double>;
 #ifdef _WIN32
-template class API_EXPORT
-    motreg::model::MotionModelImpl<double>::MotionModelParamsImpl;
-template API_EXPORT motreg::model::MotionModelImpl<
-    double>::MotionModelParamsImpl::MotionModelParamsImpl();
-template class API_EXPORT motreg::model::MotionModelImpl<double>::ObjBBoxImpl;
+template class API_EXPORT motreg::model::MotionModel<double>::MotionModelParams;
+template API_EXPORT
+motreg::model::MotionModel<double>::MotionModelParams::MotionModelParams();
+template class API_EXPORT motreg::model::MotionModel<double>::ObjBBox;
 #endif
 
 motreg::api::ObjBBox
