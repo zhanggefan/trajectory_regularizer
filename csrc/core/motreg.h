@@ -11,6 +11,8 @@
 namespace motreg {
 namespace api {
 
+enum struct BoxType : int { Normal = 0, Fixed = 1, Free = 2 };
+
 struct API_EXPORT ObjBBox {
   /// sequence index 0 ~ 199
   int sequence;
@@ -25,8 +27,8 @@ struct API_EXPORT ObjBBox {
   std::array<double, 4> boxRotationXYZW;
 
   /// whether to fix this box during optimization or not
-  /// set to false by default
-  bool boxFixed = false;
+  /// set to Normal by default
+  BoxType boxType = BoxType::Normal;
 
   /// the object line speed v (along the object's x axis)
   /// and the rotation speed w (around the object's z axis)
@@ -76,30 +78,20 @@ struct API_EXPORT MotionModelParams {
   bool verbose = false;
 };
 
-class API_EXPORT MotionModel {
-  void *pimpl;
-
+class API_EXPORT IMotionModel {
 public:
-  MotionModel(const std::vector<ObjBBox> &input,
-              const MotionModelParams &params);
-  MotionModel() = delete;
-  MotionModel(const MotionModel &) = delete;
-  MotionModel &operator=(const MotionModel &) = delete;
-  MotionModel(MotionModel &&) = delete;
-  MotionModel &operator=(MotionModel &&) = delete;
-
-  ~MotionModel();
-
-  /// query the regularized box by its sequence idx
-  /// note the queried sequence idx shall be between the min & max of
-  /// the input sequence idx
-  ObjBBox output(int sequence) const;
-  /// batch query the regularized boxes correspond to the input boxes
-  /// sequence always returned in the ascending order of sequence idx
-  std::vector<ObjBBox> output() const;
-  /// batch query the regularized boxes for a batch of sequence indices
-  /// returned in the order same to the queried batch sequence indices
-  std::vector<ObjBBox> output(const std::vector<int> &sequences) const;
+  virtual ~IMotionModel(){};
+  virtual ObjBBox output(int sequence) const = 0;
+  virtual std::vector<ObjBBox> output() const = 0;
+  virtual std::vector<ObjBBox>
+  output(const std::vector<int> &sequences) const = 0;
 };
 } // namespace api
 } // namespace motreg
+
+extern "C" {
+API_EXPORT motreg::api::IMotionModel *
+getDllMotionModel(const std::vector<motreg::api::ObjBBox> &input,
+                  const motreg::api::MotionModelParams &params);
+API_EXPORT void releaseDllMotionModel(motreg::api::IMotionModel *motionModel);
+}

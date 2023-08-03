@@ -238,6 +238,11 @@ template <class T> void EdgeConstantMotion<T>::linearizeOplus() {
 } // namespace edge
 } // namespace part
 namespace model {
+template <class T>
+MotionModel<T>::MotionModel(const std::vector<api::ObjBBox> &input,
+                            const api::MotionModelParams &params)
+    : MotionModel(std::vector<ObjBBox>(input.begin(), input.end()),
+                  MotionModelParams(params)) {}
 
 template <class T>
 MotionModel<T>::MotionModel(const std::vector<ObjBBox> &input,
@@ -306,19 +311,20 @@ MotionModel<T>::MotionModel(const std::vector<ObjBBox> &input,
     vertexObjMotion->setId(vertexId_++);
     optimizer_.addVertex(vertexObjMotion.get());
 
-    if (seqNode == lhs->sequence) {
+    if (seqNode == lhs->sequence && lhs->boxType != api::BoxType::Free) {
       auto edgeObjPose2Label = std::make_unique<EdgeObjPose2Label>();
       edgeObjPose2Label->setVertex(0, vertexObjCtr2Origin_.get());
       edgeObjPose2Label->setVertex(1, vertexObjPose.get());
       edgeObjPose2Label->setMeasurement(lhs->pose);
       edgeObjPose2Label->setInformation(params.weightObjPose2Label);
       edgeObjPose2Label->setId(edgeId_++);
-      if (lhs->poseFixed)
+      if (lhs->boxType == api::BoxType::Fixed)
         edgeObjPose2Label->setInformation(
             EdgeObjPose2Label::InformationType::Identity() * 1e20);
       optimizer_.addEdge(edgeObjPose2Label.get());
       edgesObjPose2Label_.push_back(std::move(edgeObjPose2Label));
-    }
+    } else
+      edgesObjPose2Label_.push_back(nullptr);
 
     if (!verticesObjPose_.empty()) {
       assert(!verticesObjMotion_.empty());
@@ -359,7 +365,8 @@ MotionModel<T>::MotionModel(const std::vector<ObjBBox> &input,
 }
 
 template <class T>
-typename MotionModel<T>::ObjBBox MotionModel<T>::output(int sequence) const {
+typename MotionModel<T>::ObjBBox
+MotionModel<T>::outputInternal(int sequence) const {
   assert(sequence >= input_.front().sequence &&
          sequence <= input_.back().sequence);
   int idxNode = sequence - input_.front().sequence;
@@ -373,13 +380,16 @@ typename MotionModel<T>::ObjBBox MotionModel<T>::output(int sequence) const {
   ret.motion = verticesObjMotion_[idxNode]->estimate();
   typename SE3<T>::Tangent objCtr2Origin = SE3<T>::Tangent::Zero();
   objCtr2Origin[0] = vertexObjCtr2Origin_->estimate();
-  ret.poseFixed = iterInput != input_.end() && iterInput->poseFixed;
-  ret.pose = ret.poseFixed ? iterInput->pose
-                           : verticesObjPose_[idxNode]->estimate() *
-                                 SE3<T>::exp(objCtr2Origin);
-  ret.errLabel = (iterInput == input_.end())
-                     ? EdgeObjPose2Label::ErrorVector::Zero()
-                     : edgesObjPose2Label_[iterInput - input_.begin()]->error();
+  ret.boxType =
+      iterInput == input_.end() ? api::BoxType::Free : iterInput->boxType;
+  ret.pose =
+      ret.boxType == api::BoxType::Fixed
+          ? iterInput->pose
+          : verticesObjPose_[idxNode]->estimate() * SE3<T>::exp(objCtr2Origin);
+  ret.errLabel =
+      (iterInput == input_.end() || iterInput->boxType == api::BoxType::Free)
+          ? EdgeObjPose2Label::ErrorVector::Zero()
+          : edgesObjPose2Label_[idxNode]->error();
   ret.errMotionFwd = idxNode >= edgesObjMotionFwd_.size()
                          ? EdgeObjMotionFwd::ErrorVector::Zero()
                          : edgesObjMotionFwd_[idxNode]->error();
@@ -389,22 +399,40 @@ typename MotionModel<T>::ObjBBox MotionModel<T>::output(int sequence) const {
 }
 
 template <class T>
-std::vector<typename MotionModel<T>::ObjBBox> MotionModel<T>::output() const {
+typename api::ObjBBox MotionModel<T>::output(int sequence) const {
+  return api::ObjBBox(outputInternal(sequence));
+}
+
+template <class T>
+std::vector<typename MotionModel<T>::ObjBBox>
+MotionModel<T>::outputInternal() const {
   std::vector<typename MotionModel<T>::ObjBBox> ret;
   for (const auto &objBBox : input_) {
-    ret.push_back(output(objBBox.sequence));
+    ret.push_back(outputInternal(objBBox.sequence));
+  }
+  return ret;
+}
+
+template <class T> std::vector<api::ObjBBox> MotionModel<T>::output() const {
+  auto ret = outputInternal();
+  return {ret.begin(), ret.end()};
+}
+
+template <class T>
+std::vector<typename MotionModel<T>::ObjBBox>
+MotionModel<T>::outputInternal(const std::vector<int> &sequences) const {
+  std::vector<typename MotionModel<T>::ObjBBox> ret;
+  for (auto sequence : sequences) {
+    ret.push_back(outputInternal(sequence));
   }
   return ret;
 }
 
 template <class T>
-std::vector<typename MotionModel<T>::ObjBBox>
+std::vector<api::ObjBBox>
 MotionModel<T>::output(const std::vector<int> &sequences) const {
-  std::vector<typename MotionModel<T>::ObjBBox> ret;
-  for (auto sequence : sequences) {
-    ret.push_back(output(sequence));
-  }
-  return ret;
+  auto ret = outputInternal(sequences);
+  return {ret.begin(), ret.end()};
 }
 
 } // namespace model

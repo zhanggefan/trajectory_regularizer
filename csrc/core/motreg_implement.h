@@ -1,4 +1,5 @@
 #pragma once
+#include "motreg.h"
 #include <Eigen/Core>
 #include <g2o/core/base_fixed_sized_edge.h>
 #include <g2o/core/base_vertex.h>
@@ -148,7 +149,7 @@ public:
 } // namespace part
 
 namespace model {
-template <class T> class MotionModel {
+template <class T> class MotionModel : public api::IMotionModel {
 public:
   using VertexObjCtr2Origin = motreg::part::vertex::Ctr2BaseVertex<T>;
   using VertexObjPose = motreg::part::vertex::SE3Vertex<T>;
@@ -164,11 +165,49 @@ public:
     int sequence;
     T timestamp;
     typename VertexObjPose::EstimateType pose;
-    bool poseFixed;
+    api::BoxType boxType;
     typename VertexObjMotion::EstimateType motion;
     typename EdgeObjMotionFwd::ErrorVector errMotionFwd;
     typename EdgeObjMotionBwd::ErrorVector errMotionBwd;
     typename EdgeObjPose2Label::ErrorVector errLabel;
+    ObjBBox() = default;
+    explicit ObjBBox(const api::ObjBBox &objBBox) {
+      const auto &poseR = objBBox.boxRotationXYZW;
+      const auto &poseT = objBBox.boxBottomCtrXYZ;
+      const auto &m = objBBox.motionVW;
+      const auto &emf = objBBox.errMotionFwd;
+      const auto &emb = objBBox.errMotionBwd;
+      const auto &el = objBBox.errLabel;
+      sequence = objBBox.sequence;
+      timestamp = objBBox.timestamp;
+      pose = {Eigen::Quaterniond(poseR[3], poseR[0], poseR[1], poseR[2]),
+              Eigen::Vector3d(poseT[0], poseT[1], poseT[2])};
+      boxType = objBBox.boxType;
+      motion = {m[0], m[1]};
+      errMotionFwd =
+          Eigen::Map<const Eigen::Matrix<double, 6, 1>>(emf.data()).cast<T>();
+      errMotionBwd =
+          Eigen::Map<const Eigen::Matrix<double, 6, 1>>(emb.data()).cast<T>();
+      errLabel =
+          Eigen::Map<const Eigen::Matrix<double, 6, 1>>(el.data()).cast<T>();
+    };
+    explicit operator api::ObjBBox() const {
+      const auto &poseR = pose.so3().unit_quaternion();
+      const auto &poseT = pose.translation();
+      const auto &m = motion;
+      const auto &emf = errMotionFwd;
+      const auto &emb = errMotionBwd;
+      const auto &el = errLabel;
+      return {sequence,
+              timestamp,
+              {poseT.x(), poseT.y(), poseT.z()},
+              {poseR.x(), poseR.y(), poseR.z(), poseR.w()},
+              boxType,
+              {m[0], m[1]},
+              {emf[0], emf[1], emf[2], emf[3], emf[4], emf[5]},
+              {emb[0], emb[1], emb[2], emb[3], emb[4], emb[5]},
+              {el[0], el[1], el[2], el[3], el[4], el[5]}};
+    };
   };
 
   struct MotionModelParams {
@@ -186,6 +225,25 @@ public:
     bool fixObjCtr2Origin = true;
     int steps = 100;
     bool verbose = false;
+    MotionModelParams() = default;
+    explicit MotionModelParams(const api::MotionModelParams &params) {
+      auto weightMotionDiag = Eigen::Map<const Eigen::Matrix<double, 6, 1>>(
+                                  params.weightMotion.data())
+                                  .cast<T>();
+      Eigen::Matrix<T, 2, 1> weightMotionConsistencyDiag(
+          params.weightMotionConsistency[0], params.weightMotionConsistency[1]);
+      auto weightObjPose2LabelDiag =
+          Eigen::Map<const Eigen::Matrix<double, 6, 1>>(
+              params.weightObjPose2Label.data())
+              .cast<T>();
+      weightMotion = weightMotionDiag.asDiagonal();
+      weightMotionConsistency = weightMotionConsistencyDiag.asDiagonal();
+      weightObjPose2Label = weightObjPose2LabelDiag.asDiagonal();
+      objCtr2Origin = params.objCtr2Origin;
+      fixObjCtr2Origin = params.fixObjCtr2Origin;
+      steps = params.steps;
+      verbose = params.verbose;
+    };
   };
 
 private:
@@ -208,9 +266,17 @@ private:
 public:
   explicit MotionModel(const std::vector<ObjBBox> &input,
                        const MotionModelParams &params);
-  ObjBBox output(int sequence) const;
-  std::vector<ObjBBox> output() const;
-  std::vector<ObjBBox> output(const std::vector<int> &sequences) const;
+  explicit MotionModel(const std::vector<api::ObjBBox> &input,
+                       const api::MotionModelParams &params);
+
+  api::ObjBBox output(int sequence) const override;
+  std::vector<api::ObjBBox> output() const override;
+  std::vector<api::ObjBBox>
+  output(const std::vector<int> &sequences) const override;
+
+  ObjBBox outputInternal(int sequence) const;
+  std::vector<ObjBBox> outputInternal() const;
+  std::vector<ObjBBox> outputInternal(const std::vector<int> &sequences) const;
 
   std::vector<T> debugVerticesTimestamps() const { return timestamps_; };
   const std::unique_ptr<VertexObjCtr2Origin> &debugVertexObjCtr2Origin() const {

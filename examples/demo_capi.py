@@ -15,7 +15,7 @@ def regularize(traj_boxes):
         box.timestamp = item['timestamp']
         box.boxBottomCtrXYZ = item['pose'][:3, 3]
         box.boxRotationXYZW = R.from_matrix(item['pose'][:3, :3]).as_quat()
-        box.boxFixed = False
+        box.boxType = capi.BoxType.Normal
         input.append(box)
     model_params = capi.MotionModelParams()
     model_params.verbose = True
@@ -29,7 +29,7 @@ def regularize(traj_boxes):
         obj['timestamp'] = output.timestamp
         obj['pose'][:3, :3] = R.from_quat(output.boxRotationXYZW).as_matrix()
         obj['pose'][:3, 3] = output.boxBottomCtrXYZ
-        obj['boxFixed'] = output.boxFixed
+        obj['boxType'] = int(output.boxType)
         obj['motion'] = output.motion
         obj['errMotionFwd'] = output.errMotionFwd
         obj['errMotionBwd'] = output.errMotionBwd
