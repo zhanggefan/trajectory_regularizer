@@ -83,6 +83,10 @@ public:
   MotionModel(const std::vector<ObjBBox> &input,
               const MotionModelParams &params);
   MotionModel() = delete;
+  MotionModel(const MotionModel &) = delete;
+  MotionModel &operator=(const MotionModel &) = delete;
+  MotionModel(MotionModel &&) = delete;
+  MotionModel &operator=(MotionModel &&) = delete;
 
   ~MotionModel();
 
@@ -97,5 +101,5 @@ public:
   /// returned in the order same to the queried batch sequence indices
   std::vector<ObjBBox> output(const std::vector<int> &sequences) const;
 };
-}; // namespace api
+} // namespace api
 } // namespace motreg

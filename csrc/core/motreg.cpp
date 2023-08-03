@@ -113,7 +113,8 @@ motreg::api::MotionModel::MotionModel(
 }
 
 motreg::api::MotionModel::~MotionModel() {
-  delete reinterpret_cast<motreg::model::MotionModel<double> *>(pimpl);
+  if (pimpl)
+    delete reinterpret_cast<motreg::model::MotionModel<double> *>(pimpl);
 }
 
 motreg::api::ObjBBox motreg::api::MotionModel::output(int sequence) const {
