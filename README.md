@@ -4,7 +4,7 @@ MOTREG：用于3D框轨迹整定的运动学模型
 
 ## 简介
 
-该库实现了基于CTRV的运动学模型，构造最小二乘问题，对运动目标进行运动轨迹拟合。模型的数学原理可以参考文档：[运动轨迹一致性约束模型推导](https://zi9wcyo1i5.feishu.cn/docx/NbHrdva1ToVTBUxsNPtcdBPrn2c)   
+该库实现了基于CTRV的运动学模型，构造最小二乘问题，对运动目标进行运动轨迹拟合。模型的数学原理并不复杂，都是简单的李代数求导，可惜没有能读的文档了   
 该库可以实现：
 
 - 使用运动学模型拟合3D框轨迹，对各3D框进行微调整定，使得其满足刚体运动约束
@@ -46,7 +46,7 @@ MOTREG：用于3D框轨迹整定的运动学模型
 #### 步骤三：编译本仓库
 
 ```
-> git clone https://oagit.cowarobot.cn/zhanggefan/motreg.git
+> git clone https://github.com/zhanggefan/trajectory_regularizer.git
 > cd motreg
 ```
 
@@ -95,7 +95,7 @@ MOTREG：用于3D框轨迹整定的运动学模型
 #### 步骤二：编译本仓库
 
 ```
-> git clone https://oagit.cowarobot.cn/zhanggefan/motreg.git
+> git clone https://github.com/zhanggefan/trajectory_regularizer.git
 > cd motreg
 ```
 
